@@ -114,15 +114,36 @@ Cómo se comporta, a propósito:
   quisiste), y desde el código fuente tampoco. En los dos casos la app lo dice.
 
 Para publicar una versión: bump de `version` en `package.json` en su propio
-commit `chore(release): vX.Y.Z`, y después, en una sola línea porque cada shell
-es una sesión nueva:
+commit `chore(release): vX.Y.Z`, tag `vX.Y.Z` sobre ese commit, y push de los
+dos (`git push origin main vX.Y.Z`). Después, en una sola línea porque cada
+shell es una sesión nueva:
 
 ```powershell
-$env:GH_TOKEN = gh auth token; npm run release
+$env:GH_TOKEN = gh auth token; $env:EP_DRAFT = "true"; npm run release
 ```
 
-Eso compila, crea el release `vX.Y.Z` y sube los dos `.exe` + `latest.yml`. El
-título del release es lo que ve el usuario en el cartel: que sea descriptivo.
+Eso compila y sube los dos `.exe` + `latest.yml` a un release **borrador**, que
+electron-updater no ve. `EP_DRAFT` es a propósito: sin él, el release nace
+público en el momento en que se crea, antes de que suban los archivos, y una
+instalación que busque justo en ese rato se encuentra con una versión sin
+`latest.yml`. Con el borrador no existe nada para nadie hasta que están los
+cuatro archivos y vos lo publicás, ya con título y notas (`gh` encuentra el
+borrador por su tag):
+
+```powershell
+gh release edit vX.Y.Z --draft=false --latest --title "vX.Y.Z — qué cambió" --notes-file notas.md
+```
+
+El título del release es lo que ve el usuario en el cartel: que sea descriptivo.
+Y si `npm run release` falla al publicar (un 502 de GitHub, por ejemplo), antes
+de reintentar fijate si el release quedó creado igual —pasó, con la 0.2.2— y
+borrá el vacío por id, para no terminar con dos releases del mismo tag:
+
+```powershell
+gh api repos/kiddshady/Tessera/releases --jq '.[] | select(.tag_name=="vX.Y.Z") | "\(.id) draft=\(.draft) assets=\(.assets|length)"'
+gh api -X DELETE repos/kiddshady/Tessera/releases/<id>
+```
+
 La primera instalación es a mano, siempre: una versión sin actualizador no se
 entera de nada.
 
