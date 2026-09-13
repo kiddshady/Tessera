@@ -15,6 +15,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 
 import { createRequire } from 'module';
+import { EventEmitter } from 'events';
 
 const require = createRequire(import.meta.url);
 const upd = require('../src/actualizador.cjs');
@@ -55,6 +56,75 @@ ok('buscar no explota', await upd.buscar({ manual: true }).then(() => true, () =
 ok('descargar no explota', await upd.descargar().then(() => true, () => false));
 ok('instalar dice que no', upd.instalar() === false);
 ok('y el estado sigue intacto', upd.leer().fase === 'inactivo');
+
+console.log('\n4. Una búsqueda, un solo desenlace');
+/* main manda el estado entero en cada cambio, y el renderer le pone cartel al
+   desenlace que llega. buscar() lo mandaba apenas anotaba `manual`, con el
+   desenlace de la búsqueda ANTERIOR adentro: un clic en "Buscar
+   actualizaciones" después de un "al día" hacía llegar dos 'al-dia' con
+   manual=true —dos carteles— por una sola búsqueda. Y electron-updater emite
+   'error' y además rechaza la promesa con el mismo error: dos avisos más si
+   nadie los junta. */
+
+/* Se porta como el real en lo que importa: emite antes de resolver, y cuando
+   falla emite 'error' Y rechaza con el mismo error. */
+class UpdaterFalso extends EventEmitter {
+  constructor() { super(); this.hay = null; this.falla = null; }
+  async checkForUpdates() {
+    this.emit('checking-for-update');
+    if (this.falla) { this.emit('error', this.falla); throw this.falla; }
+    if (this.hay) this.emit('update-available', this.hay); else this.emit('update-not-available', {});
+  }
+  async downloadUpdate() {
+    if (this.falla) { this.emit('error', this.falla); throw this.falla; }
+    this.emit('update-downloaded', this.hay);
+  }
+}
+
+const enviados = [];
+const ventana = { isDestroyed: () => false, webContents: { send: (_canal, e) => enviados.push(e) } };
+const fases = () => enviados.map((e) => e.fase).join(' → ');
+const falso = new UpdaterFalso();
+
+upd.iniciar(() => ventana, { empaquetada: true, portable: false, updater: falso });
+ok('con soporte, arranca inactivo', upd.leer().fase === 'inactivo');
+
+// La búsqueda silenciosa del arranque, sin nada nuevo.
+await upd.buscar({ manual: false });
+ok('la silenciosa: buscando → al-dia', fases() === 'buscando → al-dia', fases());
+ok('y ningún aviso va marcado como manual', enviados.every((e) => e.manual === false));
+
+// El clic del usuario, con ese "al día" todavía en el estado. Acá salían dos.
+enviados.length = 0;
+await upd.buscar({ manual: true });
+ok('el clic: buscando → al-dia, sin el al-dia viejo adelante', fases() === 'buscando → al-dia', fases());
+ok('un solo "al día" por búsqueda', enviados.filter((e) => e.fase === 'al-dia').length === 1);
+ok('y llega marcado como manual', enviados.at(-1).manual === true);
+
+// Sin internet: el evento y el rechazo traen el mismo error.
+enviados.length = 0;
+falso.falla = new Error('getaddrinfo ENOTFOUND github.com');
+await upd.buscar({ manual: true });
+ok('la fallida: buscando → error, una sola vez', fases() === 'buscando → error', fases());
+ok('y el error llega traducido', enviados.at(-1).error === 'No se pudo llegar a GitHub. ¿Hay internet?');
+
+// Vuelve internet: la siguiente no arrastra el error viejo como si fuera nuevo.
+enviados.length = 0;
+falso.falla = null;
+await upd.buscar({ manual: true });
+ok('tras un error, la siguiente: buscando → al-dia', fases() === 'buscando → al-dia', fases());
+ok('y ya no queda error en el estado', upd.leer().error === '');
+
+// Hay versión nueva y la descarga falla: lo mismo, un solo error.
+enviados.length = 0;
+falso.hay = { version: '9.9.9', releaseName: 'Tessera 9.9.9', files: [{ size: 1234 }] };
+await upd.buscar({ manual: true });
+ok('con versión nueva: buscando → disponible', fases() === 'buscando → disponible', fases());
+ok('y dice cuál y cuánto pesa', upd.leer().version === '9.9.9' && upd.leer().bytes === 1234);
+enviados.length = 0;
+falso.falla = new Error('ESOCKETTIMEDOUT');
+await upd.descargar();
+ok('la descarga fallida: descargando → error, una sola vez', fases() === 'descargando → error', fases());
 
 console.log(`\n═══ ${pass} ok · ${fail} fallas ═══\n`);
 process.exit(fail ? 1 : 0);

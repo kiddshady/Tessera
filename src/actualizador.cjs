@@ -96,19 +96,22 @@ function mensaje(err) {
 /** El peso del instalador, para poder decirlo ANTES de empezar a bajarlo. */
 const tamanoDe = (info) => Number(info?.files?.[0]?.size) || 0;
 
-/* ── Arranque ───────────────────────────────────────────────────────────── */
+/* ── Arranque ───────────────────────────────────────────────────────────────
+   El segundo argumento es para los tests: un actualizador falso y en qué
+   condiciones fingir que corre la app. Sin él, todo sale del entorno. */
 
-function iniciar(getWin) {
+function iniciar(getWin, {
+  empaquetada = !!electronApp?.isPackaged,
+  portable = !!process.env.PORTABLE_EXECUTABLE_FILE,
+  updater = null,
+} = {}) {
   dameVentana = getWin;
   estado = { ...VACIO, actual: electronApp?.getVersion() || '' };
 
-  const s = soporte({
-    empaquetada: !!electronApp?.isPackaged,
-    portable: !!process.env.PORTABLE_EXECUTABLE_FILE,
-  });
+  const s = soporte({ empaquetada, portable });
   if (!s.ok) { fijar({ fase: 'sin-soporte', motivo: s.motivo }); return; }
 
-  ({ autoUpdater } = require('electron-updater'));
+  autoUpdater = updater || require('electron-updater').autoUpdater;
   autoUpdater.autoDownload = false;
   /* Si nunca hacés click en "reiniciar", la actualización entra igual la próxima
      vez que cerrás Tessera. Es la parte que hace que esto sirva de verdad. */
@@ -150,16 +153,28 @@ function iniciar(getWin) {
 
 const leer = () => estado;
 
+/** electron-updater emite 'error' Y rechaza la promesa con el mismo error. Si
+    ya llegó por el evento, avisarlo de nuevo sería un segundo cartel. */
+function fallo(err) {
+  const error = mensaje(err);
+  if (estado.fase !== 'error' || estado.error !== error) fijar({ fase: 'error', error });
+}
+
 async function buscar({ manual = false } = {}) {
   if (!autoUpdater || estado.fase === 'sin-soporte') return estado;
   // Una búsqueda ya en curso, o una descarga andando, no se pisan.
   if (estado.fase === 'buscando' || estado.fase === 'descargando') return estado;
 
-  fijar({ manual });
+  /* `manual` se anota sin avisar. Avisarlo acá mandaba el desenlace de la
+     búsqueda ANTERIOR con el `manual` nuevo puesto —un "al día" viejo, un error
+     viejo— y el renderer le ponía cartel como si acabara de pasar: un clic en
+     "Buscar actualizaciones" mostraba "Estás al día" dos veces. Lo primero que
+     se avisa de esta búsqueda es 'buscando', y lo emite electron-updater. */
+  estado = { ...estado, manual };
   try {
     await autoUpdater.checkForUpdates();
   } catch (err) {
-    fijar({ fase: 'error', error: mensaje(err) });
+    fallo(err);
   }
   return estado;
 }
@@ -170,7 +185,7 @@ async function descargar() {
   try {
     await autoUpdater.downloadUpdate();
   } catch (err) {
-    fijar({ fase: 'error', error: mensaje(err) });
+    fallo(err);
   }
   return estado;
 }
