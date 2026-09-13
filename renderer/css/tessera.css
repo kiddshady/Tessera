@@ -52,10 +52,12 @@
 .ts-acc.is-expiring .ts-ring__arc { stroke: var(--ox-text-4); }
 
 /* Ajuste «ocultar»: el código vive desenfocado y se revela al pasar por
-   encima o al enfocar la fila con el teclado. */
+   encima o al enfocar la fila con el teclado. Teclado de verdad
+   (:focus-visible): el clic que copia también enfoca la fila, y con
+   :focus-within el código quedaba a la vista hasta hacer clic en otro lado. */
 .ts-acc.is-masked .ts-code { filter: blur(7px); opacity: .75; }
 .ts-acc.is-masked:hover .ts-code,
-.ts-acc.is-masked:focus-within .ts-code { filter: none; opacity: 1; }
+.ts-acc.is-masked:is(:focus-visible, :has(:focus-visible)) .ts-code { filter: none; opacity: 1; }
 
 /* Una cuenta cuya clave no se pudo descifrar. Acá SÍ es un fallo. */
 .ts-code--broken {

@@ -67,7 +67,8 @@ app.whenReady().then(async () => {
     const now = Date.now();
     const a = (await totp(SECRET, { now })).code;
     const b = (await totp(SECRET, { now: now - 1500 })).code;   // por si el test cae justo en un borde de período
-    return [a, b];
+    const c = (await totp(SECRET, { now: now + 30000 })).code;  // copiar en los últimos 3 s da el siguiente, adrede (copyCode)
+    return [a, b, c];
   };
   const files = () => fs.existsSync(path.join(DATA, 'accounts')) ? fs.readdirSync(path.join(DATA, 'accounts')).filter((f) => f.endsWith('.json')) : [];
 
@@ -142,6 +143,41 @@ app.whenReady().then(async () => {
   await js(`document.querySelector('.ts-acc [data-act="copy"]').click(); true`);
   await sleep(300);
   ok('el botón Copiar de la fila también copia', (await expected()).includes(await copied()), await copied());
+
+  console.log('\n4-bis. Las acciones de la fila no se quedan pegadas al clic');
+  // El click() de arriba es sintético y no mueve el foco. Acá va un clic de
+  // mouse de verdad, que deja la fila (tabindex) enfocada: con :focus-within
+  // las acciones quedaban a la vista en la última fila clickeada aunque el
+  // mouse ya se hubiera ido. Con el teclado, en cambio, SÍ tienen que verse.
+  // :focus solo aplica con la ventana activa, por eso el control positivo:
+  // si el foco lo tiene otra ventana, falla ese y no pasa nada de casualidad.
+  win.focus();
+  const mouse = (type, x, y, extra = {}) => win.webContents.sendInputEvent({ type, x: Math.round(x), y: Math.round(y), ...extra });
+  const key = (keyCode, modifiers = []) => { win.webContents.sendInputEvent({ type: 'keyDown', keyCode, modifiers }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode, modifiers }); };
+  const actions = () => js(`Number(getComputedStyle(document.querySelector('.ts-acc .ox-rowactions')).opacity)`);
+  const focused = () => js(`document.activeElement?.className || ''`);
+  const fila = await rect('.ts-acc');
+  const sobreAvatar = [fila.x + 40, fila.y + fila.h / 2];   // lejos del código seleccionable y de las acciones
+  await mouse('mouseMove', ...sobreAvatar);
+  await sleep(400);
+  ok('con el mouse encima se ven', (await actions()) === 1, `opacity=${await actions()}`);
+  await resetCopied();
+  await mouse('mouseDown', ...sobreAvatar, { button: 'left', clickCount: 1 });
+  await mouse('mouseUp', ...sobreAvatar, { button: 'left', clickCount: 1 });
+  await sleep(400);
+  ok('el clic de mouse copia y deja la fila enfocada', (await expected()).includes(await copied()) && /ts-acc/.test(await focused()), await focused());
+  const cabecera = await rect('.ox-viewhead');
+  await mouse('mouseMove', cabecera.x + cabecera.w / 2, cabecera.y + 8);
+  await sleep(450);
+  ok('al irse el mouse se esfuman, aunque la fila siga enfocada', (await actions()) === 0 && /ts-acc/.test(await focused()), `opacity=${await actions()} foco=${await focused()}`);
+  key('Tab');
+  await sleep(400);
+  ok('Tab entra a Copiar y las acciones vuelven (foco de teclado adentro)', /ox-iconbtn/.test(await focused()) && (await actions()) === 1, `opacity=${await actions()} foco=${await focused()}`);
+  key('Tab', ['shift']);
+  await sleep(400);
+  ok('Shift+Tab vuelve a la fila y siguen a la vista (foco de teclado en la fila)', /ts-acc/.test(await focused()) && (await actions()) === 1, `opacity=${await actions()} foco=${await focused()}`);
+  await js(`document.activeElement?.blur(); true`);
+  await sleep(300);
 
   console.log('\n5. Borrar NO pregunta, y se puede deshacer');
   const id = relisted[0].id;
