@@ -31,7 +31,7 @@
                anteriores es blanco hardcodeado y no hay forma de taparlo.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell, Tray, Menu, nativeImage } = require('electron');
 const path = require('path');
 const ipc = require('./src/ipc.cjs');
 const store = require('./src/store.cjs');
@@ -51,6 +51,39 @@ const MIN_H = 520;
 
 /** @type {BrowserWindow | null} */
 let win = null;
+/** @type {Tray | null} */
+let tray = null;
+/* Cerrar la ventana la esconde en la bandeja: un autenticador se quiere a mano
+   siempre. Solo "Salir" del menú de la bandeja (o el actualizador) termina el
+   proceso de verdad, y lo marca acá para que el `close` deje pasar. */
+let quitting = false;
+
+/* ── Una sola instancia ──────────────────────────────────────────────────────
+   Abrir Tessera con una ya corriendo no abre otra: trae la que está al frente.
+   Dos instancias sobre el mismo data/ serían dos escritores del mismo JSON. */
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
+}
+
+function reveal() {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.show();
+  win.focus();
+}
+
+function createTray() {
+  const icon = nativeImage.createFromPath(path.join(__dirname, 'build', 'icon.ico'));
+  tray = new Tray(icon);
+  tray.setToolTip('Tessera');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Mostrar Tessera', click: reveal },
+    { type: 'separator' },
+    { label: 'Salir', click: () => { quitting = true; app.quit(); } },
+  ]));
+  // Un clic en la bandeja: si está al frente la esconde; si no, la trae.
+  tray.on('click', () => (win && !win.isDestroyed() && win.isVisible() && win.isFocused() ? win.hide() : reveal()));
+}
 
 /* ── Estado de la ventana ────────────────────────────────────────────────────
    Recordar tamaño y posición entre sesiones. La trampa: si el monitor donde
@@ -156,6 +189,11 @@ function createWindow(state) {
   });
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 
+  win.on('close', (e) => {
+    if (quitting) return;
+    e.preventDefault();
+    win.hide();
+  });
   win.on('closed', () => { win = null; });
 }
 
@@ -178,9 +216,16 @@ ipcMain.on('win:set-bg', (_e, hex) => {
   }
 });
 
+app.on('second-instance', reveal);
+/* app.quit() viene de "Salir", del actualizador (quitAndInstall) o del sistema
+   al apagar: en todos los casos el `close` tiene que dejar cerrar de verdad. */
+app.on('before-quit', () => { quitting = true; });
+
 app.whenReady().then(async () => {
+  if (!app.hasSingleInstanceLock()) return;
   ipc.register({ getWin: () => win });
   createWindow(await loadWindowState());
+  createTray();
 
   /* El actualizador se engancha a la ventana por función, no por referencia:
      la ventana puede cerrarse y volver a crearse. La primera búsqueda es

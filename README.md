@@ -51,6 +51,14 @@ trae **Deshacer** durante seis segundos y la trae de vuelta con el mismo id y
 la clave intacta. Para eso el `Toast` de Onyx ganó un `action: { label, run }`
 (ver `renderer/js/overlays.js`).
 
+## Siempre a mano
+
+Tessera corre en **una sola instancia**: abrirla de nuevo trae al frente la que
+ya está. Y **cerrar la ventana la esconde en la bandeja**, no la termina: un
+autenticador se quiere abierto. El ícono de la bandeja la muestra con un clic;
+*Salir* está en su menú, y es lo único (además del actualizador) que la cierra
+de verdad.
+
 ## Dónde viven las claves
 
 `data/accounts/<id>.json`, un archivo por cuenta, como cualquier colección de
