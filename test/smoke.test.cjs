@@ -33,6 +33,7 @@ setTimeout(() => bail('timeout de 120s'), 120000);
 app.whenReady().then(async () => {
   let win = null;
   require(path.join(ROOT, 'src', 'ipc.cjs')).register({ getWin: () => win });
+  const actualizador = require(path.join(ROOT, 'src', 'actualizador.cjs'));
   const qr = require(path.join(ROOT, 'src', 'qr.cjs'));
   const { totp } = await import('../renderer/js/totp.js');
 
@@ -43,6 +44,7 @@ app.whenReady().then(async () => {
   });
   const errores = [];
   win.webContents.on('console-message', (e) => { if (e.level >= 2) errores.push(`${e.level}: ${e.message}`); });
+  actualizador.iniciar(() => win);   // como en main.cjs: desde el código fuente queda "sin soporte"
   await win.loadFile(path.join(ROOT, 'renderer', 'index.html'));
   win.show();
   await sleep(2200);
@@ -193,6 +195,15 @@ app.whenReady().then(async () => {
   await click('[data-view="codigos"]');
   await sleep(700);
   ok('y se apaga igual de fácil', !(await js(`document.querySelector('.ts-acc').classList.contains('is-masked')`)));
+
+  console.log('\n7-bis. Actualizador');
+  // Corrida como `electron test/…`, app.getVersion() es la de Electron, no la
+  // del package.json; lo que se prueba es que la statusbar diga la misma que el main.
+  ok('la statusbar muestra la versión', (await text('#stat-version .ox-statusbar__value')) === `v${app.getVersion()}`, await text('#stat-version .ox-statusbar__value'));
+  await click('#stat-version');
+  await sleep(500);
+  ok('desde el código fuente, buscar avisa que acá no se actualiza sola', await js(`[...document.querySelectorAll('.ox-toast__title')].some(t => /no se actualiza sola/.test(t.textContent))`));
+  ok('y explica por qué', await js(`[...document.querySelectorAll('.ox-toast__text')].some(t => /código fuente/.test(t.textContent))`));
 
   console.log('\n8. Paleta de comandos');
   await click('#btn-palette');

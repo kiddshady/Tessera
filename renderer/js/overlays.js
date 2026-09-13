@@ -169,7 +169,7 @@ const Toast = (() => {
         timer = setTimeout(close, Math.max(900, left));
       });
     }
-    return { close };
+    return { close, el };
   }
 
   return { show, error: (title, text) => show({ title, text, tone: 'error', duration: 7000 }) };

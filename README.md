@@ -9,9 +9,11 @@ con la palabra del día. Eso es exactamente un código TOTP.
 
 ```
 npm run dev      # con la consola del renderer en la terminal
-npm test         # motor TOTP contra los vectores del RFC + store + tokens
+npm test         # motor TOTP contra los vectores del RFC + store + tokens + actualizador
 npm run smoke    # monta la app con Electron y la usa como una persona
 npm run icon     # regenera build/icon.ico desde tools/icon.py (Pillow)
+npm run build    # instalador NSIS + portable en dist/, sin publicar
+npm run release  # lo mismo, y lo sube como release de GitHub (ver abajo)
 ```
 
 ## Cómo entra una cuenta
@@ -71,11 +73,45 @@ transición lineal, así el reloj se ve continuo tocando el DOM una sola vez por
 tick. Si le quedan menos de 3 s al código, el clic copia el **siguiente**: el
 que va a valer cuando lo pegues.
 
+## Instalar y actualizar
+
+Los releases viven en <https://github.com/kiddshady/Tessera/releases>: un
+instalador (`Tessera-Setup-x.y.z.exe`) y un portable. Instalada, **se actualiza
+sola** con `electron-updater` leyendo el `latest.yml` que electron-builder sube
+a cada release — no hay servidor ni endpoint que mantener.
+
+Cómo se comporta, a propósito:
+
+- Busca al arrancar, en silencio. **Solo avisa si hay algo**: un "estás al día"
+  en cada arranque es lo que hace que la gente odie a los actualizadores.
+- **Nunca descarga sin que se lo pidas** (pesa ~90 MB). El toast ofrece *Ver*, el
+  modal dice cuánto pesa y linkea las notas, y *Descargar* es tu clic.
+- Bajada, se instala con *Reiniciar y actualizar* — o sola la próxima vez que
+  cerrás la app, si nunca hacés clic.
+- La versión de la statusbar es el botón: clic para buscar a mano, o para abrir
+  la que ya está esperando.
+- **La portable no se actualiza sola** (es un solo `.exe` que dejaste donde
+  quisiste), y desde el código fuente tampoco. En los dos casos la app lo dice.
+
+Para publicar una versión: bump de `version` en `package.json` en su propio
+commit `chore(release): vX.Y.Z`, y después, en una sola línea porque cada shell
+es una sesión nueva:
+
+```powershell
+$env:GH_TOKEN = gh auth token; npm run release
+```
+
+Eso compila, crea el release `vX.Y.Z` y sube los dos `.exe` + `latest.yml`. El
+título del release es lo que ve el usuario en el cartel: que sea descriptivo.
+La primera instalación es a mano, siempre: una versión sin actualizador no se
+entera de nada.
+
 ## Mapa de lo propio
 
 ```
 src/vault.cjs           la bóveda: cifra al guardar, descifra al listar, marca lo ilegible
 src/qr.cjs              pantalla / archivo / portapapeles → texto del QR (jsQR)
+src/actualizador.cjs    electron-updater con las decisiones aparte y testeables
 renderer/js/totp.js     HOTP/TOTP + base32, puro
 renderer/js/otpauth.js  otpauth:// ida y vuelta, y el formato del respaldo
 renderer/js/app.js      vistas, alta, borrado con deshacer, motor de tick

@@ -67,6 +67,19 @@ contextBridge.exposeInMainWorld('onyx', {
     import: () => call('backup:import'),
   },
 
+  /** Actualizaciones: el estado viene entero en cada cambio. */
+  update: {
+    estado: () => call('update:estado'),
+    buscar: (opts) => call('update:buscar', opts),
+    descargar: () => call('update:descargar'),
+    instalar: () => call('update:instalar'),
+    onCambio: (cb) => {
+      const handler = (_e, estado) => cb(estado);
+      ipcRenderer.on('update:cambio', handler);
+      return () => ipcRenderer.off('update:cambio', handler);
+    },
+  },
+
   /** Colección: una carpeta con un archivo por ítem. */
   col: (name) => ({
     list: () => call('col:list', name),

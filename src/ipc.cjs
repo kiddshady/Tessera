@@ -17,6 +17,7 @@ const fsp = require('fs/promises');
 const store = require('./store.cjs');
 const vault = require('./vault.cjs');
 const qr = require('./qr.cjs');
+const actualizador = require('./actualizador.cjs');
 
 /* Las colecciones que el renderer puede tocar. Es una lista blanca a
    propósito: sin ella, cualquier bug en el renderer puede crear carpetas
@@ -61,6 +62,13 @@ function register({ getWin = () => null } = {}) {
   handle('qr:screen', () => qr.fromScreen(getWin()));
   handle('qr:file', () => qr.fromFile(getWin()));
   handle('qr:clipboard', () => qr.fromClipboard());
+
+  /* ── Actualizaciones. El estado viaja entero; los cambios van al revés,
+     por 'update:cambio' (ver actualizador.cjs). ── */
+  handle('update:estado', () => actualizador.leer());
+  handle('update:buscar', (opts) => actualizador.buscar(opts));
+  handle('update:descargar', () => actualizador.descargar());
+  handle('update:instalar', () => actualizador.instalar());
 
   /* ── Respaldo: texto plano, una URI por línea. El renderer lo arma y lo lee. ── */
   handle('backup:export', async (text, suggested = 'tessera-respaldo.txt') => {

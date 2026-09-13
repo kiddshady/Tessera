@@ -117,6 +117,12 @@
 .ts-preview .ts-ring { margin-right: var(--ox-1); }
 .ts-preview__note { flex: 1 1 100%; line-height: var(--ox-lh); }
 
+/* ── La versión en la statusbar ──────────────────────────────────────────────
+   Es un botón discreto: buscar actualizaciones, o abrir la que ya está. */
+.ts-version { cursor: pointer; transition: color var(--ox-t-1) var(--ox-ease-soft); }
+.ts-version:hover { color: var(--ox-text); }
+.ts-version.is-pending .ox-statusbar__value { color: var(--ox-text); }
+
 /* ── Ajustes ─────────────────────────────────────────────────────────────────
    Una fila de ajuste: texto a la izquierda, control a la derecha. */
 .ts-setting {

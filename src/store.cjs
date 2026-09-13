@@ -31,7 +31,19 @@
 const fsp = require('fs/promises');
 const path = require('path');
 
-const ROOT = process.env.TESSERA_DATA || path.join(__dirname, '..', 'data');
+/* Empaquetada, `__dirname` cae adentro de app.asar (solo lectura) y cada
+   guardado fallaría EN SILENCIO. Instalada, los datos van a
+   %APPDATA%\Tessera\data. El require de electron va dentro de un try porque
+   los tests cargan este módulo con node pelado. */
+function raizPorDefecto() {
+  try {
+    const { app } = require('electron');
+    if (app && app.isPackaged) return path.join(app.getPath('userData'), 'data');
+  } catch { /* fuera de Electron */ }
+  return path.join(__dirname, '..', 'data');
+}
+
+const ROOT = process.env.TESSERA_DATA || raizPorDefecto();
 const SETTINGS_FILE = path.join(ROOT, 'settings.json');
 
 /* ── Ajustes de tu app ───────────────────────────────────────────────────────
