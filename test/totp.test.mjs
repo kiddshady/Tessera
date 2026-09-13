@@ -2,7 +2,7 @@
    Si esto falla, ningún código que muestre la app sirve. */
 
 import { hotp, totp, base32Decode, base32Encode, groupDigits, msLeft, counterAt, isValidSecret } from '../renderer/js/totp.js';
-import { parseOtpauth, buildOtpauth, parseBackup } from '../renderer/js/otpauth.js';
+import { parseOtpauth, buildOtpauth, parseBackup, parseMigration, isMigration } from '../renderer/js/otpauth.js';
 
 let pass = 0; let fail = 0;
 const ok = (n, c, x = '') => { if (c) { pass++; console.log(`  ok   ${n}`); } else { fail++; console.log(`  FALLA ${n} ${x}`); } };
@@ -78,6 +78,42 @@ for (const acc of [a, b, c]) {
 ok('el build omite los defaults', buildOtpauth(a) === 'otpauth://totp/PAMI%3ARecetaElectronica?secret=JBSWY3DPEHPK3PXP&issuer=PAMI');
 const bk = parseBackup(`# respaldo\n${buildOtpauth(a)}\n\nbasura\n${buildOtpauth(b)}\n`);
 ok('el respaldo lee 2 cuentas y reporta 1 línea mala', bk.accounts.length === 2 && bk.errors.length === 1);
+
+console.log('\n7. Google Authenticator (otpauth-migration)');
+/* Los bytes están escritos a mano desde google_auth.proto, no generados con el
+   mismo código que los lee: si el lector y el test compartieran una suposición
+   equivocada sobre el wire format, esto no la taparía.
+     OtpParameters:
+       0a 0a  <10 bytes>          secret = "Hello!" + DE AD BE EF  (= JBSWY3DPEHPK3PXP)
+       12 18  "Example:alice@google.com"   name
+       1a 07  "Example"           issuer
+       20 01                      algorithm = SHA1
+       28 01                      digits = SIX
+       30 02                      type = TOTP
+     MigrationPayload:
+       0a 35  <OtpParameters>     otp_parameters[0]
+       10 01  version=1 · 18 01 batch_size=1 · 20 00 batch_index=0 · 28 2a batch_id=42 */
+const hex = (h) => Uint8Array.from(h.replace(/\s+/g, '').match(/../g).map((b) => parseInt(b, 16)));
+const str = (t) => [...new TextEncoder().encode(t)].map((b) => b.toString(16).padStart(2, '0')).join('');
+const params = '0a0a' + '48656c6c6f21deadbeef' + '1218' + str('Example:alice@google.com') + '1a07' + str('Example') + '2001' + '2801' + '3002';
+const payload = hex('0a35' + params + '1001' + '1801' + '2000' + '282a');
+const b64 = btoa(String.fromCharCode(...payload));
+const mig = `otpauth-migration://offline?data=${encodeURIComponent(b64)}`;
+ok('se reconoce como migración', isMigration(mig) && !isMigration('otpauth://totp/x?secret=A'));
+const m = parseMigration(mig);
+ok('trae una cuenta', m.accounts.length === 1 && m.skipped.length === 0, JSON.stringify(m));
+ok('emisor y cuenta (el issuer manda, el nombre pierde el prefijo)', m.accounts[0].issuer === 'Example' && m.accounts[0].account === 'alice@google.com');
+ok('la clave binaria pasa a base32', m.accounts[0].secret === 'JBSWY3DPEHPK3PXP', m.accounts[0].secret);
+ok('parámetros', m.accounts[0].algorithm === 'SHA1' && m.accounts[0].digits === 6 && m.accounts[0].period === 30);
+ok('el lote', m.batch.index === 0 && m.batch.size === 1);
+ok('y el mismo código que la cuenta parseada por otpauth://', (await totp(m.accounts[0].secret, { now: 59_000 })).code === (await totp(a.secret, { now: 59_000 })).code);
+// Una HOTP adentro del lote se saltea con explicación, la TOTP de al lado entra igual.
+const hotpParams = '0a0a' + '48656c6c6f21deadbeef' + '1204' + str('hotp') + '2001' + '2801' + '3001' + '3805';
+const two = hex('0a' + (params.length / 2).toString(16).padStart(2, '0') + params + '0a' + (hotpParams.length / 2).toString(16).padStart(2, '0') + hotpParams + '1802' + '2001');
+const m2 = parseMigration(`otpauth-migration://offline?data=${encodeURIComponent(btoa(String.fromCharCode(...two)))}`);
+ok('lote 2 de 2 con una HOTP: entra la TOTP y la otra se explica', m2.accounts.length === 1 && m2.skipped.length === 1 && /HOTP/.test(m2.skipped[0]) && m2.batch.index === 1 && m2.batch.size === 2, JSON.stringify(m2.skipped));
+ok('parseOtpauth sigue rechazándolo con mensaje claro', rejects(mig, /migración/));
+ok('datos rotos → error legible', (() => { try { parseMigration('otpauth-migration://offline?data=%%%'); return false; } catch (e) { return /decodificar|malformada|datos/.test(e.message); } })());
 
 console.log(`\n${pass} ok, ${fail} fallas`);
 process.exit(fail ? 1 : 0);

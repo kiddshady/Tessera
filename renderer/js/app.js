@@ -20,7 +20,7 @@ import { viewEl, esc, paint, head, empty, attempt, copy, colorToken, path } from
 import { plural, monogram, fmtDate, fmtBytes } from './format.js';
 import { designHTML, wireDesign } from './design-view.js';
 import { totp, counterAt, msLeft, groupDigits, isValidSecret, normalizeSecret, ALGORITHMS } from './totp.js';
-import { parseOtpauth, buildOtpauth, parseBackup } from './otpauth.js';
+import { parseOtpauth, buildOtpauth, parseBackup, parseMigration, isMigration } from './otpauth.js';
 
 const api = window.onyx;
 
@@ -184,7 +184,7 @@ function viewCodigos() {
     : empty({
       icon: 'tessera',
       title: 'Ninguna cuenta todavía',
-      text: 'Dejá el QR del sitio visible en pantalla y Tessera lo lee solo. También sirve una imagen guardada, el portapapeles, o la clave escrita a mano.',
+      text: 'Dejá el QR del sitio visible en pantalla y Tessera lo lee solo. También sirve una imagen guardada, el portapapeles, la clave escrita a mano, o el QR de "Transferir cuentas" de Google Authenticator.',
       actions: addButtonsHTML('primary'),
     })));
   paintTick(Date.now());
@@ -244,9 +244,74 @@ async function intake(readFn, { emptyTitle, emptyText }) {
   try { data = await readFn(); } catch (err) { Toast.error('No se pudo leer el QR', err.message); return; }
   if (data === undefined) return;                       // el diálogo se canceló
   if (data === null) { Toast.show({ title: emptyTitle, text: emptyText, icon: 'search' }); return; }
+  if (isMigration(data)) {
+    let m;
+    try { m = parseMigration(data); } catch (err) { Toast.error('Ese QR de migración no sirve', err.message); return; }
+    await confirmMigration(m);
+    return;
+  }
   let parsed;
   try { parsed = parseOtpauth(data); } catch (err) { Toast.error('Ese QR no sirve', err.message); return; }
   await confirmAccount(parsed);
+}
+
+const accountKey = (a) => `${a.issuer}|${a.account}|${a.secret}`;
+
+/** El QR de "Transferir cuentas" de Google Authenticator: varias cuentas de una. */
+async function confirmMigration({ accounts, skipped, batch }) {
+  const have = new Set(S.accounts.map(accountKey));
+  const fresh = accounts.filter((a) => !have.has(accountKey(a)));
+  const dup = accounts.length - fresh.length;
+  const lote = batch.size > 1 ? `Lote ${batch.index + 1} de ${batch.size}` : '';
+
+  if (!fresh.length) {
+    Toast.show({
+      title: accounts.length ? 'Nada nuevo en este QR' : 'Este QR no trae cuentas TOTP',
+      text: [accounts.length ? `${plural(accounts.length, 'cuenta', 'cuentas')} ya estaban` : '', ...skipped].filter(Boolean).join(' · '),
+      icon: 'info', duration: 8000,
+    });
+    return;
+  }
+
+  const body = document.createElement('div');
+  body.className = 'ox-col';
+  body.style.gap = '14px';
+  body.innerHTML = `
+    <div class="ox-list">${fresh.map((a) => `
+      <div class="ox-listitem">
+        <div class="ox-avatar">${esc(monogram(a.issuer || a.account))}</div>
+        <div class="ox-listitem__main">
+          <span class="ox-listitem__title ox-truncate">${esc(a.issuer || a.account)}</span>
+          ${a.issuer && a.account ? `<span class="ox-listitem__sub ox-truncate">${esc(a.account)}</span>` : ''}
+        </div>
+        <span class="ox-chip ox-chip--mono">${esc(a.digits)} · ${esc(a.algorithm)}</span>
+      </div>`).join('')}
+    </div>
+    ${dup ? `<div class="ox-meta">${esc(plural(dup, 'cuenta', 'cuentas'))} ya ${dup === 1 ? 'estaba' : 'estaban'} y no se ${dup === 1 ? 'repite' : 'repiten'}.</div>` : ''}
+    ${skipped.length ? `<div class="ox-meta">No entran: ${esc(skipped.join(' · '))}</div>` : ''}
+    ${lote ? `<div class="ox-meta">${esc(lote)}. Cuando termine, escaneá el QR siguiente del teléfono.</div>` : ''}`;
+
+  const ok = await Modal.show({
+    title: `Google Authenticator: ${plural(fresh.length, 'cuenta', 'cuentas')}`,
+    sub: 'Las claves se guardan cifradas en tu disco. No salen de esta máquina.',
+    body,
+    width: 500,
+    actions: [
+      { label: 'Cancelar', value: null },
+      { label: fresh.length === 1 ? 'Importar' : `Importar ${fresh.length}`, value: true, variant: 'primary', autofocus: true },
+    ],
+  });
+  if (!ok) return;
+
+  let n = 0;
+  await attempt(async () => {
+    for (const a of fresh) {
+      await saveAccount({ ...a, id: await api.accounts.nextId(), createdAt: Date.now() + n });
+      n++;
+    }
+  }, { errorTitle: 'Falló a mitad de la importación' });
+  Toast.show({ title: `${plural(n, 'cuenta importada', 'cuentas importadas')}`, text: lote || undefined, icon: 'check' });
+  Router.name === 'codigos' ? Router.refresh() : Router.go('codigos');
 }
 
 const addFromScreen = () => intake(() => api.qr.screen(), {
@@ -525,9 +590,8 @@ async function importBackup() {
   const { accounts, errors } = parseBackup(text);
   if (!accounts.length) { Toast.error('El archivo no tiene cuentas', errors[0] || 'Ninguna línea con otpauth://'); return; }
 
-  const key = (a) => `${a.issuer}|${a.account}|${a.secret}`;
-  const have = new Set(S.accounts.map(key));
-  const fresh = accounts.filter((a) => !have.has(key(a)));
+  const have = new Set(S.accounts.map(accountKey));
+  const fresh = accounts.filter((a) => !have.has(accountKey(a)));
   let n = 0;
   await attempt(async () => {
     for (const a of fresh) {

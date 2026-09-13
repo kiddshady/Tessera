@@ -79,7 +79,7 @@ function fromClipboard() {
   const data = decodeImage(clipboard.readImage());
   if (data) return data;
   const text = (clipboard.readText() || '').trim();
-  return /^otpauth:/i.test(text) ? text : null;
+  return /^otpauth(-migration)?:/i.test(text) ? text : null;
 }
 
 module.exports = { decodeImage, fromScreen, fromFile, fromClipboard };

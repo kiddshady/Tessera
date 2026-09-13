@@ -9,13 +9,15 @@
    práctica y complica la UI para nada.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-import { normalizeSecret, isValidSecret, ALGORITHMS } from './totp.js';
+import { normalizeSecret, isValidSecret, ALGORITHMS, base32Encode } from './totp.js';
+
+export const isMigration = (input) => /^otpauth-migration:\/\//i.test(String(input || '').trim());
 
 /** Parsea una URI y devuelve una cuenta lista para guardar. Tira con un mensaje legible. */
 export function parseOtpauth(input) {
   const uri = String(input || '').trim();
-  if (/^otpauth-migration:/i.test(uri)) {
-    throw new Error('Es un QR de migración de Google Authenticator, no de una cuenta. Escaneá el QR original del sitio.');
+  if (isMigration(uri)) {
+    throw new Error('Es un QR de migración de Google Authenticator: trae varias cuentas. Usá parseMigration.');
   }
   if (!/^otpauth:\/\//i.test(uri)) throw new Error('El QR no contiene una URI otpauth://.');
 
@@ -75,4 +77,125 @@ export function parseBackup(text) {
     try { out.push(parseOtpauth(line)); } catch (err) { errors.push(`${line.slice(0, 40)}… → ${err.message}`); }
   }
   return { accounts: out, errors };
+}
+
+/* ══ Google Authenticator: otpauth-migration:// ═════════════════════════════
+   "Transferir cuentas → Exportar" en el teléfono muestra uno o varios QR con
+   TODAS las cuentas adentro, como un protobuf en base64:
+
+     otpauth-migration://offline?data=<base64 url-encoded>
+
+   El esquema es conocido (google_auth.proto) y chico, así que se decodifica a
+   mano en vez de traer una librería de protobuf por dos mensajes:
+
+     MigrationPayload { repeated OtpParameters otp_parameters = 1;
+                        int32 version = 2; int32 batch_size = 3;
+                        int32 batch_index = 4; int32 batch_id = 5; }
+     OtpParameters    { bytes secret = 1; string name = 2; string issuer = 3;
+                        Algorithm algorithm = 4;   // 1 SHA1 · 2 SHA256 · 3 SHA512 · 4 MD5
+                        DigitCount digits = 5;     // 1 seis · 2 ocho
+                        OtpType type = 6;          // 1 HOTP · 2 TOTP
+                        int64 counter = 7; }
+
+   Solo se usan los dos tipos de campo del wire format que aparecen acá:
+   varint (0) y length-delimited (2). */
+
+function readVarint(buf, pos) {
+  let value = 0; let shift = 0; let b;
+  do {
+    if (pos >= buf.length) throw new Error('protobuf truncado');
+    b = buf[pos++];
+    // Más allá de 2^53 no hay ningún campo de este esquema; alcanza con Number.
+    value += (b & 0x7f) * 2 ** shift;
+    shift += 7;
+  } while (b & 0x80);
+  return [value, pos];
+}
+
+/** Recorre un mensaje y devuelve sus campos como lista [{ field, wire, value }]. */
+function readMessage(buf) {
+  const out = [];
+  let pos = 0;
+  while (pos < buf.length) {
+    let tag;
+    [tag, pos] = readVarint(buf, pos);
+    const field = Math.floor(tag / 8);
+    const wire = tag & 7;
+    if (wire === 0) {
+      let v; [v, pos] = readVarint(buf, pos);
+      out.push({ field, wire, value: v });
+    } else if (wire === 2) {
+      let len; [len, pos] = readVarint(buf, pos);
+      if (pos + len > buf.length) throw new Error('protobuf truncado');
+      out.push({ field, wire, value: buf.subarray(pos, pos + len) });
+      pos += len;
+    } else if (wire === 1) { pos += 8; } else if (wire === 5) { pos += 4; }
+    else throw new Error(`protobuf: tipo de campo desconocido (${wire})`);
+  }
+  return out;
+}
+
+function base64ToBytes(b64) {
+  const clean = b64.replace(/-/g, '+').replace(/_/g, '/').replace(/\s/g, '');
+  const bin = atob(clean + '='.repeat((4 - (clean.length % 4)) % 4));
+  return Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+}
+
+const GA_ALGORITHM = { 0: 'SHA1', 1: 'SHA1', 2: 'SHA256', 3: 'SHA512' };
+const GA_DIGITS = { 0: 6, 1: 6, 2: 8 };
+const text = (bytes) => new TextDecoder().decode(bytes);
+
+/**
+ * Un QR de migración → { accounts, skipped, batch: { index, size } }.
+ * `skipped` explica cada cuenta que no se pudo traer (HOTP, MD5, sin clave).
+ */
+export function parseMigration(input) {
+  const uri = String(input || '').trim();
+  if (!isMigration(uri)) throw new Error('No es un QR de migración de Google Authenticator.');
+  let url;
+  try { url = new URL(uri); } catch { throw new Error('La URI otpauth-migration:// está malformada.'); }
+  const data = url.searchParams.get('data');
+  if (!data) throw new Error('El QR de migración no trae datos.');
+
+  let fields;
+  try { fields = readMessage(base64ToBytes(data)); } catch (err) { throw new Error(`No pude decodificar el QR de migración: ${err.message}`); }
+
+  const accounts = []; const skipped = [];
+  const batch = { index: 0, size: 1 };
+  for (const f of fields) {
+    if (f.field === 3 && f.wire === 0) batch.size = f.value || 1;
+    if (f.field === 4 && f.wire === 0) batch.index = f.value;
+    if (f.field !== 1 || f.wire !== 2) continue;
+
+    const p = {};
+    for (const q of readMessage(f.value)) {
+      if (q.field === 1 && q.wire === 2) p.secret = q.value;
+      else if (q.field === 2 && q.wire === 2) p.name = text(q.value);
+      else if (q.field === 3 && q.wire === 2) p.issuer = text(q.value);
+      else if (q.field === 4) p.algorithm = q.value;
+      else if (q.field === 5) p.digits = q.value;
+      else if (q.field === 6) p.type = q.value;
+    }
+    const label = [p.issuer, p.name].filter(Boolean).join(' · ') || '(sin nombre)';
+    if (p.type === 1) { skipped.push(`${label}: es HOTP (por contador), Tessera solo maneja TOTP`); continue; }
+    if (!(p.algorithm in GA_ALGORITHM)) { skipped.push(`${label}: algoritmo no soportado (MD5)`); continue; }
+    if (!p.secret?.length) { skipped.push(`${label}: viene sin clave`); continue; }
+
+    // El nombre puede venir como "Emisor:cuenta"; el campo issuer manda si está.
+    let issuer = (p.issuer || '').trim();
+    let account = (p.name || '').trim();
+    const colon = account.indexOf(':');
+    if (colon >= 0) {
+      if (!issuer) issuer = account.slice(0, colon).trim();
+      account = account.slice(colon + 1).trim();
+    }
+    accounts.push({
+      issuer, account,
+      secret: base32Encode(p.secret),
+      algorithm: GA_ALGORITHM[p.algorithm],
+      digits: GA_DIGITS[p.digits] ?? 6,
+      period: 30,
+    });
+  }
+  return { accounts, skipped, batch };
 }

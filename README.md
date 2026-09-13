@@ -29,8 +29,20 @@ el código de ahora, para cotejar contra el sitio antes de guardar):
 | **A mano** | Emisor, cuenta y la clave base32; dígitos/período/algoritmo plegados abajo. |
 
 Solo TOTP (por tiempo). HOTP por contador casi no existe y complicaba la UI
-para nada; el QR de migración de Google Authenticator tampoco (es un protobuf
-propio): en los dos casos el error lo dice con todas las letras.
+para nada: el error lo dice con todas las letras.
+
+### Traer las cuentas de Google Authenticator
+
+En el teléfono, *Transferir cuentas → Exportar cuentas* muestra uno o varios QR
+`otpauth-migration://` con todas las cuentas adentro (un protobuf en base64;
+`otpauth.js` lo decodifica a mano, el esquema es chico). Cualquiera de los
+cuatro caminos lo entiende: se lista lo que trae, se saltea lo que ya está y lo
+que no es TOTP, y se importa el lote entero. Si son varios QR, se escanea uno
+por uno.
+
+Para que Tessera vea la pantalla del teléfono: espejarlo con scrcpy
+(`phone <alias>`) y *Escanear la pantalla*, o sacarle una foto al QR y entrar
+por *Desde una imagen*.
 
 ## Borrar no pregunta
 

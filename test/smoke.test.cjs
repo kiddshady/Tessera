@@ -253,6 +253,32 @@ app.whenReady().then(async () => {
   ok('ahora hay dos cuentas', (await count('.ts-acc')) === 2 && files().length === 2);
   ok('la nueva muestra un código de 8', (await js(`document.querySelectorAll('.ts-acc .ts-code')[1].textContent`)).replace(/\s/g, '').length === 8);
 
+  console.log('\n9-bis. Migración de Google Authenticator');
+  /* El mismo payload escrito a mano que en totp.test.mjs, con otra cuenta:
+     secret "Hello!"+DEADBEEF, name "Migrada:fran", issuer "Migrada", SHA1, 6, TOTP. */
+  const strHex = (t) => [...Buffer.from(t, 'utf8')].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const params = '0a0a48656c6c6f21deadbeef' + '120c' + strHex('Migrada:fran') + '1a07' + strHex('Migrada') + '200128013002';
+  const payload = Buffer.from('0a' + (params.length / 2).toString(16).padStart(2, '0') + params + '10011801200028ff01', 'hex');
+  const migUri = `otpauth-migration://offline?data=${encodeURIComponent(payload.toString('base64'))}`;
+  clipboard.writeText(migUri);
+  ok('del portapapeles se lee tal cual', qr.fromClipboard() === migUri);
+  await click('[data-menu="add"]');
+  await sleep(400);
+  await js(`[...document.querySelectorAll('.ox-menu *')].find(e => e.textContent.trim() === 'Del portapapeles' && e.childElementCount <= 2)?.click(); true`);
+  await sleep(800);
+  ok('el modal lista la cuenta que trae', /Google Authenticator: 1 cuenta/.test(await text('.ox-modal')) && /Migrada/.test(await text('.ox-modal')));
+  await click('.ox-modal__foot .ox-btn--primary');
+  await sleep(900);
+  ok('ahora hay tres cuentas', (await count('.ts-acc')) === 3 && files().length === 3);
+  ok('la migrada muestra el mismo código que PAMI (misma clave)', (await js(`[...document.querySelectorAll('.ts-acc .ts-code')].map(e => e.textContent.replace(/\\s/g, ''))`)).filter((c, i, arr) => arr.indexOf(c) !== i).length === 1);
+  // Escanearlo de nuevo no duplica.
+  await click('[data-menu="add"]');
+  await sleep(400);
+  await js(`[...document.querySelectorAll('.ox-menu *')].find(e => e.textContent.trim() === 'Del portapapeles' && e.childElementCount <= 2)?.click(); true`);
+  await sleep(700);
+  ok('repetido: avisa que ya estaba y no abre modal', !(await js(`!!document.querySelector('.ox-modal')`)) && await js(`[...document.querySelectorAll('.ox-toast__title')].some(t => /Nada nuevo/.test(t.textContent))`));
+  ok('y siguen siendo tres', (await count('.ts-acc')) === 3 && files().length === 3);
+
   console.log('\n10. Sin errores en la consola del renderer');
   ok('ninguno', errores.length === 0, errores.join(' | '));
 
