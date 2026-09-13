@@ -1,0 +1,24 @@
+{
+  "name": "tessera",
+  "productName": "Tessera",
+  "version": "0.1.0",
+  "description": "Autenticador TOTP de escritorio: los códigos de doble factor, leídos del QR en pantalla, con las claves cifradas en tu disco.",
+  "main": "main.cjs",
+  "author": "Fran",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node test/tokens.test.mjs && node test/store.test.mjs && node test/format.test.mjs && node test/totp.test.mjs",
+    "smoke": "electron test/smoke.test.cjs",
+    "icon": "python tools/icon.py"
+  },
+  "devDependencies": {
+    "electron": "40.10.2",
+    "qrcode": "^1.5.4"
+  },
+  "dependencies": {
+    "jsqr": "^1.4.0"
+  },
+  "type": "module"
+}

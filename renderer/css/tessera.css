@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   TESSERA — lo propio de la app
+   Prefijo `ts-`. Lo que no está acá es Onyx tal cual; acá solo viven las tres
+   piezas que ningún framework trae: la fila de una cuenta, el código y el
+   anillo del tiempo.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── La fila de una cuenta ──────────────────────────────────────────────────
+   Es un .ox-listitem con más aire: el código es un dato grande y necesita
+   respirar. La fila entera copia al clic (ajuste), por eso el cursor. */
+.ts-acc {
+  gap: var(--ox-4);
+  min-height: 60px;
+  padding: var(--ox-3) var(--ox-4);
+  cursor: default;
+}
+.ts-acc.is-copiable { cursor: pointer; }
+.ts-acc .ox-listitem__title { font-size: var(--ox-fs-13); }
+.ts-acc .ox-listitem__sub { font-size: var(--ox-fs-11); }
+
+/* La fila que se borra se va deslizando y cede su alto, así las de abajo
+   suben acompañando en vez de saltar cuando el nodo desaparece. */
+.ts-acc[data-state='closing'] {
+  overflow: hidden;
+  min-height: 0;
+  pointer-events: none;
+  animation: ts-row-out var(--ox-t-3) var(--ox-ease-in) both;
+}
+@keyframes ts-row-out {
+  from { opacity: 1; transform: translateX(0); max-height: 72px; }
+  60%  { opacity: 0; transform: translateX(14px); max-height: 72px; }
+  to   { opacity: 0; transform: translateX(14px); max-height: 0; padding-top: 0; padding-bottom: 0; }
+}
+
+/* ── El código ───────────────────────────────────────────────────────────────
+   Mono porque es un dato exacto; tabular para que no baile cuando cambia;
+   seleccionable porque es literalmente lo que la persona vino a copiar. */
+.ts-code {
+  flex: 0 0 auto;
+  font-family: var(--ox-mono);
+  font-size: var(--ox-fs-19);
+  font-weight: var(--ox-w-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .08em;
+  color: var(--ox-text);
+  user-select: text;
+  transition: color var(--ox-t-2) var(--ox-ease), filter var(--ox-t-2) var(--ox-ease), opacity var(--ox-t-2) var(--ox-ease);
+}
+/* Los últimos segundos: el código se apaga un paso, sin ponerse rojo. El rojo
+   es del fallo, y un código por vencer no es un fallo — es un reloj. */
+.ts-acc.is-expiring .ts-code { color: var(--ox-text-2); }
+.ts-acc.is-expiring .ts-ring__arc { stroke: var(--ox-text-4); }
+
+/* Ajuste «ocultar»: el código vive desenfocado y se revela al pasar por
+   encima o al enfocar la fila con el teclado. */
+.ts-acc.is-masked .ts-code { filter: blur(7px); opacity: .75; }
+.ts-acc.is-masked:hover .ts-code,
+.ts-acc.is-masked:focus-within .ts-code { filter: none; opacity: 1; }
+
+/* Una cuenta cuya clave no se pudo descifrar. Acá SÍ es un fallo. */
+.ts-code--broken {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ox-2);
+  font-family: var(--ox-font);
+  font-size: var(--ox-fs-12);
+  font-weight: var(--ox-w-regular);
+  letter-spacing: 0;
+  color: var(--ox-danger);
+}
+
+/* ── El anillo del tiempo ────────────────────────────────────────────────────
+   Un círculo que se vacía en sentido horario. El arco se mueve con una
+   transición lineal de un segundo por cada tick, así el reloj se ve continuo
+   sin tocar el DOM más de una vez por segundo. Al reiniciarse el período la
+   transición se apaga un frame (.is-reset) para que no se "rellene" hacia
+   atrás. */
+.ts-ring {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.ts-ring__track { fill: none; stroke: var(--ox-line-2); stroke-width: 2.4; }
+.ts-ring__arc {
+  fill: none;
+  stroke: var(--ox-accent);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 50% 50%;
+  transition: stroke-dashoffset 1s linear, stroke var(--ox-t-2) var(--ox-ease);
+}
+.ts-ring__arc.is-reset { transition: stroke var(--ox-t-2) var(--ox-ease); }
+.ts-ring__sec {
+  fill: var(--ox-text-3);
+  font-family: var(--ox-mono);
+  font-size: 10.5px;
+  font-weight: var(--ox-w-medium);
+  text-anchor: middle;
+  dominant-baseline: central;
+  user-select: none;
+}
+
+/* ── Vista previa en el modal de confirmación ──────────────────────────────── */
+.ts-preview {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ox-3) var(--ox-4);
+  padding: var(--ox-3) var(--ox-4);
+  border-radius: var(--ox-r-md);
+  background: var(--ox-sunken);
+  box-shadow: var(--ox-hairline);
+}
+.ts-preview .ts-code { font-size: var(--ox-fs-26); }
+.ts-preview .ts-ring { margin-right: var(--ox-1); }
+.ts-preview__note { flex: 1 1 100%; line-height: var(--ox-lh); }
+
+/* ── Ajustes ─────────────────────────────────────────────────────────────────
+   Una fila de ajuste: texto a la izquierda, control a la derecha. */
+.ts-setting {
+  display: flex;
+  align-items: center;
+  gap: var(--ox-4);
+  padding: var(--ox-3) 0;
+}
+.ts-setting + .ts-setting { box-shadow: inset 0 1px 0 var(--ox-line); }
+.ts-setting__main { flex: 1 1 auto; min-width: 0; }
+.ts-setting__title { font-size: var(--ox-fs-13); color: var(--ox-text); }
+.ts-setting__text { font-size: var(--ox-fs-11); color: var(--ox-text-3); margin-top: 2px; line-height: var(--ox-lh); }
