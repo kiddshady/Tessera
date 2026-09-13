@@ -1,7 +1,7 @@
 {
   "name": "tessera",
   "productName": "Tessera",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Autenticador TOTP de escritorio: los códigos de doble factor, leídos del QR en pantalla, con las claves cifradas en tu disco.",
   "main": "main.cjs",
   "author": "Kidd Shady · Umbrovex Systems <umbrovex@proton.me>",
