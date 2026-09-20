@@ -13,7 +13,6 @@
 
 import { Icons } from './icons.js';
 import { Tooltip, Toast, Menu, Modal } from './overlays.js';
-import Palette from './palette.js';
 import Router from './router.js';
 import { initClickFlash, initScrollFades, raf2, exit, tick, bindSwitcher } from './motion.js';
 import { viewEl, esc, paint, head, empty, attempt, copy, colorToken, path } from './ui.js';
@@ -73,7 +72,6 @@ async function saveAccount(acc) {
   S.accounts = [...S.accounts.filter((a) => a.id !== saved.id), saved];
   sortAccounts();
   await computeCode(saved);
-  registerCommands();
   updateChrome();
   return saved;
 }
@@ -523,7 +521,6 @@ async function deleteAccount(id) {
   S.accounts = S.accounts.filter((a) => a.id !== id);
   S.codes.delete(id);
   S.trash = { acc, index };
-  registerCommands();
   updateChrome();
 
   // La fila se va animada; si era la última, la vista pasa al estado vacío.
@@ -558,7 +555,6 @@ async function restoreTrash() {
     await computeCode(saved);
     return saved;
   }, { errorTitle: 'No se pudo restaurar' });
-  registerCommands();
   updateChrome();
   if (ok) Router.refresh();
 }
@@ -864,7 +860,6 @@ function wireShell() {
 
   document.querySelectorAll('.ox-navitem').forEach((b) =>
     b.addEventListener('click', () => Router.go(b.dataset.view)));
-  document.getElementById('btn-palette')?.addEventListener('click', () => Palette.toggle());
 
   /* Delegación global, cableada una sola vez: las vistas se repintan enteras
      con innerHTML y un listener en #view se acumularía a cada visita. */
@@ -920,27 +915,6 @@ function updateChrome() {
     dir ? `<div class="ox-meta" data-tip="${esc(dir)}">${path(dir)}</div>` : '';
 }
 
-function registerCommands() {
-  Palette.clear();
-  Palette.register([
-    { id: 'scan', group: 'Agregar', icon: 'screen', label: 'Escanear la pantalla', run: addFromScreen },
-    { id: 'image', group: 'Agregar', icon: 'image', label: 'Desde una imagen', run: addFromFile },
-    { id: 'clip', group: 'Agregar', icon: 'clipboard', label: 'Del portapapeles', run: addFromClipboard },
-    { id: 'manual', group: 'Agregar', icon: 'edit', label: 'Escribir la clave a mano', run: addManual },
-    { id: 'nav-codigos', group: 'Ir a', icon: 'key', label: 'Códigos', run: () => Router.go('codigos') },
-    { id: 'nav-ajustes', group: 'Ir a', icon: 'settings', label: 'Ajustes', run: () => Router.go('ajustes') },
-    { id: 'nav-piezas', group: 'Ir a', icon: 'layers', label: 'Piezas', run: () => Router.go('piezas') },
-    { id: 'export', group: 'Respaldo', icon: 'download', label: 'Exportar respaldo', run: exportBackup },
-    { id: 'import', group: 'Respaldo', icon: 'upload', label: 'Importar respaldo', run: importBackup },
-    { id: 'update', group: 'Sistema', icon: 'retry', label: 'Buscar actualizaciones', run: checkUpdates },
-    ...S.accounts.map((a) => ({
-      id: `copy-${a.id}`, group: 'Copiar código', icon: 'copy',
-      label: a.issuer || a.account, hint: a.issuer ? a.account : '',
-      run: () => copyCode(a.id),
-    })),
-  ]);
-}
-
 /* ══ Color de la ventana ═════════════════════════════════════════════════════
    --ox-bg está en oklch y Electron solo entiende hex. colorToken() lo resuelve
    con un canvas, no con un regex: parseando el texto la app se mandaba VERDE. */
@@ -954,7 +928,6 @@ function syncWindowColor() {
 async function boot() {
   Icons.mount(document);
   Tooltip.init();
-  Palette.init({ placeholder: 'Copiar un código, agregar una cuenta…' });
   initClickFlash();
   initScrollFades();
   wireShell();
@@ -968,7 +941,6 @@ async function boot() {
     return;
   }
 
-  registerCommands();
   updateChrome();
   wireUpdates();
   Router.go('codigos');

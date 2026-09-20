@@ -241,13 +241,12 @@ app.whenReady().then(async () => {
   ok('desde el código fuente, buscar avisa que acá no se actualiza sola', await js(`[...document.querySelectorAll('.ox-toast__title')].some(t => /no se actualiza sola/.test(t.textContent))`));
   ok('y explica por qué', await js(`[...document.querySelectorAll('.ox-toast__text')].some(t => /código fuente/.test(t.textContent))`));
 
-  console.log('\n8. Paleta de comandos');
-  await click('#btn-palette');
-  await sleep(500);
-  ok('abre y cae dentro de la ventana', inside(await rect('.ox-palette')), JSON.stringify(await rect('.ox-palette')));
-  ok('lista la cuenta para copiar su código', await js(`[...document.querySelectorAll('.ox-palette *')].some(e => e.childElementCount === 0 && e.textContent.trim() === 'PAMI Salud')`));
-  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
-  await sleep(400);
+  console.log('\n8. Sin paleta de comandos');
+  ok('no queda el botón de comandos', !(await js(`document.querySelector('#btn-palette')`)));
+  win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control'] });
+  win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'K', modifiers: ['control'] });
+  await sleep(200);
+  ok('Ctrl+K no abre una paleta', !(await js(`document.querySelector('.ox-palette')`)));
 
   console.log('\n9. QR de verdad');
   const QRCode = require('qrcode');
