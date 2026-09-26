@@ -31,6 +31,9 @@ Icons.add({
   screen: '<rect x="1.8" y="2.8" width="12.4" height="8.4" rx="1.5"/><path d="M5.6 13.6h4.8M8 11.2v2.4"/>',
   image: '<rect x="2.2" y="2.6" width="11.6" height="10.8" rx="1.6"/><circle cx="5.7" cy="6.1" r="1.1"/><path d="M13.6 10.4 10.6 7.4l-4.2 4.2-1.7-1.7L2.5 12"/>',
   clipboard: '<path d="M6.2 2.4h3.6a1 1 0 0 1 1 1v.9H5.2v-.9a1 1 0 0 1 1-1z"/><path d="M4.6 3.7H4.2a1.3 1.3 0 0 0-1.3 1.3v7.4a1.3 1.3 0 0 0 1.3 1.3h7.6a1.3 1.3 0 0 0 1.3-1.3V5a1.3 1.3 0 0 0-1.3-1.3h-.4"/><path d="M5.8 8.2h4.4M5.8 10.6h3"/>',
+  /* La llave de Prism, de contorno continuo y en diagonal (la `key` base es
+     horizontal y de trazos sueltos). */
+  passKey: '<g transform="rotate(-45 8 8)"><path d="M8.31 6.6H1.9V9.4H3.2V11H5.8V9.4H8.31A3.3 3.3 0 1 0 8.31 6.6Z"/><circle cx="12.3" cy="8" r="1" fill="currentColor" stroke="none"/></g>',
 });
 
 /* ══ Datos ═══════════════════════════════════════════════════════════════════ */
