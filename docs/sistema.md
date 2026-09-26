@@ -21,8 +21,8 @@ componente escribe un valor crudo.
 | `--ox-bg` | Base de la ventana |
 | `--ox-s1` | Rail, statusbar |
 | `--ox-s2` | Card, panel, fila elevada |
-| `--ox-s3` | Menú, modal, popover |
-| `--ox-s4` | Tooltip, lo más alto |
+| `--ox-s3` | Menú, modal, popover, tooltip |
+| `--ox-s4` | Lo más alto: lo que flota sobre todo |
 
 La croma crece con la luminancia: un plano claro necesita más temperatura que
 uno oscuro para no verse lavado.
@@ -123,7 +123,7 @@ sabe cuánto entra:
 `.ox-truncate` lleva `display: block` a propósito: sobre un elemento **inline**
 —un `<span>` suelto dentro de un div— `overflow` y `text-overflow` no aplican, y
 sin eso la clase no hace nada y el texto se corta al aire. Donde el span ya es
-ítem de un flex (menús) funcionaba igual, y por eso el agujero pasó
+ítem de un flex (los menús) funcionaba igual, y por eso el agujero pasó
 desapercibido tanto tiempo.
 
 El esfumado de `.ox-scroll` va **solo donde el corte es al aire**. Si de ese lado
@@ -139,7 +139,7 @@ Modificadores: `--line-top` · `--line-bottom` (y `--line-left` · `--line-right
 en `.ox-scroll-x`). El shell ya los aplica donde corresponde, y con `:has()`, así
 que si sacás la pieza que cerraba ese lado el fade vuelve solo: rail contra su
 pie, inspector contra el suyo, vista contra la statusbar y contra un encabezado
-con línea, y modal contra su pie. **El menú no esfuma
+con línea, modal contra su pie. **El menú no esfuma
 nunca** — su hairline lo cierra por los cuatro lados, y como máscara y borde
 viven en el mismo elemento, el fade le comía el propio hairline. El tamaño lo da
 `--ox-fade`, y el contenedor lleva padding ≥ ese valor para que en reposo la
@@ -189,6 +189,24 @@ banda no coma el primer ni el último ítem.
 
 La titlebar entera es zona de arrastre; lo que sea clickeable lleva
 `.ox-no-drag`. `#ox-layer` es donde se portalean todos los overlays.
+
+Los `.ox-wincontrol` se clickean en todo el alto de la titlebar (maximizada,
+la esquina acierta la cruz), pero se ven como una pastilla de 28 px adentro:
+hover, press y el anillo de foco no llegan al canto de la ventana, donde se
+cortaban. Si la titlebar tiene otras piezas al lado (pestañas, por ejemplo),
+`--ox-wincontrol-nudge` corre la pastilla en vertical para alinearla.
+
+### El anillo de foco no se corta
+
+El anillo de `base.css` sale **3.5px por fuera** del elemento. Todo lo que
+pueda recibir foco necesita ese aire hasta cualquier cosa que recorte (un
+`.ox-scroll`, el borde de la ventana) y hasta el canto de la superficie que lo
+contiene. Donde no lo hay, el anillo va **hacia adentro**: así lo llevan el
+`.ox-segmented__opt` (2px de carril) y la `.ox-tr` con tabindex (va de borde a
+borde, muchas veces de una card). El rail deja `--ox-2` arriba del nav por lo
+mismo, y de paso separa el botón principal de la navegación. `npm run smoke`
+lo mide en cada vista (9-bis): si sumás una pieza que pega su anillo contra un
+borde, falla ahí.
 
 ### Dentro de la vista
 
@@ -277,8 +295,13 @@ también adentro de una celda de tabla: el `1fr` reparte parejo solo con ancho
 indefinido, y una celda `.ox-td--tight` le da un ancho definido igual a su
 mínimo, sin espacio libre que repartir. Se descubrió en una tabla con un
 segmentado de dos opciones de distinto largo: salían de 71 y 50px, y la cápsula
-caía 10px corrida de su texto. El de humo mide el centro del texto contra el
-centro de la cápsula, en un flex y en una tabla.
+caía 10px corrida de su texto. El contrapeso es `max-width: 100%`: en un
+contenedor más angosto que la suma de las opciones (el inspector de Quire, 288px
+útiles y `overflow: hidden`) el control a max-content medía 317px y la última
+opción quedaba recortada por el panel; acotado, el `1fr` reparte lo que hay, las
+columnas quedan desparejas solo cuando no entra otra cosa, y la cápsula —que
+mide— las sigue. El de humo mide el centro del texto contra el centro de la
+cápsula en un flex, en una tabla y en un contenedor angosto.
 
 **El ícono grande del estado vacío es solo el hijo directo** (`.ox-empty >
 .ox-icon`): con el selector descendiente, un botón de acción con ícono adentro
@@ -313,6 +336,13 @@ Las acciones van en `.ox-rowactions` (aparecen con el hover o con el foco de tec
 `--ox-surface`, la superficie donde cayó la tabla, y no un plano fijo — con
 `--ox-bg` a secas, dentro de una card el encabezado quedaba más oscuro que sus
 propias filas. El de humo lo mide sobre la vista y dentro de una card.
+Dentro de un `.ox-scroll` se clava con `top: -var(--ox-fade)`: el sticky se
+engancha al borde del contenido, y sin eso quedaba debajo del padding del
+esfumado con las filas pasando por arriba. Mientras está clavado, el scroller
+lleva `.is-stuck-head` y no esfuma arriba: la hairline ya es el límite.
+
+Una `.ox-tr` que se abre con Enter lleva `tabindex="0"`, y su anillo de foco es
+un outline hacia adentro, pintado encima de las celdas.
 
 **`.ox-td--num` va también en el `<th>`, no solo en las celdas.** Si el
 encabezado no la lleva, el título se queda a la izquierda mientras los números

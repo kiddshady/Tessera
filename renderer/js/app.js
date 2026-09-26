@@ -330,7 +330,7 @@ const addFromClipboard = () => intake(() => api.qr.clipboard(), {
 
 /** Segmentado + su cableado, para los tres parámetros avanzados. */
 function segHTML(id, options, value) {
-  return `<div class="ox-segmented" id="${id}" style="width:max-content">${options
+  return `<div class="ox-segmented" id="${id}">${options
     .map((o) => `<button class="ox-segmented__opt${String(o) === String(value) ? ' is-active' : ''}" data-value="${o}">${o}</button>`)
     .join('')}</div>`;
 }
