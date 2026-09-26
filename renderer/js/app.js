@@ -580,7 +580,7 @@ async function exportBackup() {
     '',
   ];
   const file = await attempt(() => api.backup.export(lines.join('\n'), `tessera-respaldo-${new Date().toISOString().slice(0, 10)}.txt`), { errorTitle: 'No se pudo exportar' });
-  if (file) Toast.show({ title: 'Respaldo guardado', text: file, icon: 'download' });
+  if (file) Toast.show({ title: 'Respaldo guardado', text: file, icon: 'upload' });
 }
 
 async function importBackup() {
@@ -646,8 +646,8 @@ function viewAjustes() {
                 : 'Este sistema no ofrece cifrado; las claves están guardadas en texto plano dentro de la carpeta de datos.'}
             </p>
             <div class="ox-row" style="gap:8px;flex-wrap:wrap">
-              <button class="ox-btn ox-btn--secondary ox-flashable" data-action="export"><i data-icon="download"></i> Exportar respaldo</button>
-              <button class="ox-btn ox-btn--secondary ox-flashable" data-action="import"><i data-icon="upload"></i> Importar respaldo</button>
+              <button class="ox-btn ox-btn--secondary ox-flashable" data-action="export"><i data-icon="upload"></i> Exportar respaldo</button>
+              <button class="ox-btn ox-btn--secondary ox-flashable" data-action="import"><i data-icon="download"></i> Importar respaldo</button>
             </div>
           </div></div>
         </div>
