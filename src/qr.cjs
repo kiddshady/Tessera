@@ -75,10 +75,16 @@ async function fromFile(win) {
   return decodeImage(img);
 }
 
-function fromClipboard() {
-  const data = decodeImage(clipboard.readImage());
-  if (data) return data;
-  const text = (clipboard.readText() || '').trim();
+/* Desde Electron 44 el portapapeles del main es el de la web: asíncrono y
+   sin readImage. Una imagen copiada llega como un item con image/png. */
+async function fromClipboard() {
+  for (const item of await clipboard.read()) {
+    if (!item.types.includes('image/png')) continue;
+    const png = Buffer.from(await (await item.getType('image/png')).arrayBuffer());
+    const data = decodeImage(nativeImage.createFromBuffer(png));
+    if (data) return data;
+  }
+  const text = ((await clipboard.readText()) || '').trim();
   return /^otpauth(-migration)?:/i.test(text) ? text : null;
 }
 

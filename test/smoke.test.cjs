@@ -10,7 +10,7 @@
    QR que está realmente en pantalla (una segunda ventana lo muestra).
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const { app, BrowserWindow, clipboard, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, clipboard, ClipboardItem, nativeImage, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -254,10 +254,10 @@ app.whenReady().then(async () => {
   const png = await QRCode.toBuffer(uri, { width: 260, margin: 2 });
   ok('decodeImage lee un PNG con QR', qr.decodeImage(nativeImage.createFromBuffer(png)) === uri);
   ok('y devuelve null en una imagen sin QR', qr.decodeImage(nativeImage.createFromBitmap(Buffer.alloc(96 * 96 * 4, 120), { width: 96, height: 96 })) === null);
-  clipboard.writeText(uri);
-  ok('del portapapeles como texto', qr.fromClipboard() === uri);
-  clipboard.writeImage(nativeImage.createFromBuffer(png));
-  ok('del portapapeles como imagen', qr.fromClipboard() === uri);
+  await clipboard.writeText(uri);
+  ok('del portapapeles como texto', (await qr.fromClipboard()) === uri);
+  await clipboard.write([new ClipboardItem({ 'image/png': new Blob([png], { type: 'image/png' }) })]);
+  ok('del portapapeles como imagen', (await qr.fromClipboard()) === uri);
 
   // El QR en una ventana visible, y Tessera lo lee de la pantalla. Va por
   // archivos: un <img> con el PNG embebido en una data-URL no llegaba a
@@ -276,7 +276,7 @@ app.whenReady().then(async () => {
   shower.close();
 
   // Y el camino completo por la UI: pegar el otpauth en el portapapeles → "Del portapapeles" → confirmar.
-  clipboard.writeText(uri);
+  await clipboard.writeText(uri);
   await click('[data-menu="add"]');
   await sleep(400);
   ok('el menú de agregar cae dentro de la ventana', inside(await rect('.ox-menu')));
@@ -295,8 +295,8 @@ app.whenReady().then(async () => {
   const params = '0a0a48656c6c6f21deadbeef' + '120c' + strHex('Migrada:fran') + '1a07' + strHex('Migrada') + '200128013002';
   const payload = Buffer.from('0a' + (params.length / 2).toString(16).padStart(2, '0') + params + '10011801200028ff01', 'hex');
   const migUri = `otpauth-migration://offline?data=${encodeURIComponent(payload.toString('base64'))}`;
-  clipboard.writeText(migUri);
-  ok('del portapapeles se lee tal cual', qr.fromClipboard() === migUri);
+  await clipboard.writeText(migUri);
+  ok('del portapapeles se lee tal cual', (await qr.fromClipboard()) === migUri);
   await click('[data-menu="add"]');
   await sleep(400);
   await js(`[...document.querySelectorAll('.ox-menu *')].find(e => e.textContent.trim() === 'Del portapapeles' && e.childElementCount <= 2)?.click(); true`);
