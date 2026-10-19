@@ -241,6 +241,29 @@ app.whenReady().then(async () => {
   ok('desde el código fuente, buscar avisa que acá no se actualiza sola', await js(`[...document.querySelectorAll('.ox-toast__title')].some(t => /no se actualiza sola/.test(t.textContent))`));
   ok('y explica por qué', await js(`[...document.querySelectorAll('.ox-toast__text')].some(t => /código fuente/.test(t.textContent))`));
 
+  // El % de la descarga corre de a poco (roll) en vez de saltar, y sin
+  // destello. Los estados se fabrican por el canal del main.
+  const bajando = (pct) => ({ fase: 'descargando', version: '9.9.9', actual: app.getVersion(), progreso: { pct, transferido: pct * 1e7, total: 1e7 } });
+  win.webContents.send('update:cambio', bajando(0.1));
+  await sleep(500);
+  win.webContents.send('update:cambio', bajando(0.6));
+  const pctUpd = await js(`(async () => {
+    const toast = [...document.querySelectorAll('.ox-toast')].find((t) => /Descargando Tessera/.test(t.textContent));
+    const el = toast?.querySelector('.ox-toast__text');
+    const vistos = []; let destello = false; const t0 = performance.now();
+    while (performance.now() - t0 < 600) {
+      const m = el?.textContent.match(/^(\\d+) %/); if (m) vistos.push(+m[1]);
+      if (el?.classList.contains('ox-ticked')) destello = true;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    toast?.querySelector('[data-close]')?.click();
+    return { vistos: [...new Set(vistos)], destello, dice: el?.textContent };
+  })()`);
+  win.webContents.send('update:cambio', actualizador.leer());
+  await sleep(400);
+  ok('el % de la descarga corre de a poco hasta el nuevo, sin destello',
+    !pctUpd.destello && pctUpd.vistos.some((v) => v > 10 && v < 60) && pctUpd.vistos.at(-1) === 60, JSON.stringify(pctUpd));
+
   console.log('\n8. Sin paleta de comandos');
   ok('no queda el botón de comandos', !(await js(`document.querySelector('#btn-palette')`)));
   win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'K', modifiers: ['control'] });

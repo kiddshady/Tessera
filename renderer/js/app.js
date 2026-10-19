@@ -14,7 +14,7 @@
 import { Icons } from './icons.js';
 import { Tooltip, Toast, Menu, Modal } from './overlays.js';
 import Router from './router.js';
-import { initClickFlash, initScrollFades, raf2, exit, tick, bindSwitcher } from './motion.js';
+import { initClickFlash, initScrollFades, raf2, exit, tick, bindSwitcher, roll } from './motion.js';
 import { viewEl, esc, paint, head, empty, attempt, copy, colorToken, path } from './ui.js';
 import { plural, monogram, fmtDate, fmtBytes } from './format.js';
 import { designHTML, wireDesign } from './design-view.js';
@@ -782,14 +782,18 @@ function paintVersion() {
     : 'Buscar actualizaciones';
 }
 
+/* El porcentaje y los bytes corren suave (roll) en vez de saltar de un aviso
+   al otro, y sin destello: corren solos, y un destello en cada aviso titila. */
 function paintDownload(e) {
-  const pct = Math.round(e.progreso.pct * 100);
-  const text = e.progreso.total
-    ? `${pct} % · ${fmtBytes(e.progreso.transferido)} de ${fmtBytes(e.progreso.total)}`
-    : `${fmtBytes(e.progreso.transferido)}…`;
   if (!updToast) updToast = Toast.show({ title: `Descargando Tessera ${e.version}`, text: ' ', icon: 'download', duration: 0 });
   const t = updToast.el?.querySelector('.ox-toast__text');
-  if (t) t.textContent = text;
+  if (!t) return;
+  const { total } = e.progreso;
+  roll(t, { pct: e.progreso.pct * 100, transferido: e.progreso.transferido }, (v) => {
+    t.textContent = total
+      ? `${Math.round(v.pct)} % · ${fmtBytes(v.transferido)} de ${fmtBytes(total)}`
+      : `${fmtBytes(v.transferido)}…`;
+  });
 }
 
 function offerUpdate(e) {
